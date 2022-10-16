@@ -18,16 +18,16 @@ int main(void) {
 
 	int height = 1000;
 	int width = 1000;
-	int n_agents = 100000;
+	int n_agents = 500000;
 
 	Params params;
 
 	params.speed = 1;
 	params.dt = 1;
-	params.evaporate_rate = 0.05;
-	params.senseAngle = 0.5*PI;
-	params.senseSize = 10;
-	params.senseRadius = 15;
+	params.evaporate_rate = 0.07;
+	params.senseAngle = 0.8*PI; // strong impact on dispersion
+	params.senseSize = 10; // strong impact on edge formation
+	params.senseRadius = 25; // Strong impact on cell sizes
 	params.turnspeed = 0.5;
 
 	if(sin(params.senseAngle/2)*params.senseRadius <= params.senseSize)
@@ -50,14 +50,13 @@ int main(void) {
 	float x_stop = (width/2.f)+10.f;
 	float y_start = (height/2.f)-10.f;
 	float y_stop = (height/2.f)+10.f;
-
 	for(int i=0; i<agents.n_agents; i++){
 		agents.pos[i].x = (x_stop-x_start)*(static_cast <float> (rand()) / static_cast <float> (RAND_MAX))+x_start;
 		agents.pos[i].y = (y_stop-y_start)*(static_cast <float> (rand()) / static_cast <float> (RAND_MAX))+y_start;
-		agents.angle[i] = (static_cast <float> (rand()%RAND_MAX) / static_cast <float> (RAND_MAX))*2*PI;
+		agents.angle[i] = (static_cast <float> (rand()%RAND_MAX) / static_cast <float> (RAND_MAX))*2*PI-PI;
 	}
 	
-	//Send agents to device -> Not outside of the function in order to apply Gaussian blur
+	//Send agents to device
 	Agents d_agents;
 	d_agents.n_agents = agents.n_agents;
 	cudaMalloc(&(d_agents.pos), agents.n_agents*sizeof(float2));
@@ -70,9 +69,7 @@ int main(void) {
 	map.height = height;
 	map.width = width;
 	map.elements = (float *) malloc(map.height*map.width*sizeof(float));
-	for(int i=0; i<width; i++)
-		for(int j=0; j<height; j++)
-			map.elements[i*width+j] = 0;
+	memset(map.elements, 0, map.height*map.width*sizeof(float));
 	
 	//Send trailmap to device
 	TrailMatrix d_map;
@@ -81,14 +78,21 @@ int main(void) {
 	cudaMalloc(&(d_map.elements), map.width*map.height*sizeof(float));
 	cudaMemcpy(d_map.elements, map.elements, map.width*map.height*sizeof(float), cudaMemcpyHostToDevice);
 
+	// openCV matrix for visualisation + random color
 	cv::Mat ocv_map(width, height, CV_8UC3);
 	cv::Vec3b color(rand()%255, rand()%255, rand()%255);
 	
+	// Allocate a vector on device for randomness
+	float *rdm_num;
+	cudaMalloc(&rdm_num, d_agents.n_agents*sizeof(float));
+
+	cv::namedWindow("map"); 
+
 	char keyboard = ' ';
 	int step = 0;
 	while (keyboard != 'q') {
 	
-		move(d_agents, d_map, params, gen);
+		move(d_agents, d_map, params, gen, rdm_num);
 		cudaMemcpy(map.elements, d_map.elements, map.width*map.height*sizeof(float), cudaMemcpyDeviceToHost);
 
 		mat_t_ocv(map, ocv_map, color);
@@ -99,7 +103,6 @@ int main(void) {
 		std::string step_string = stream.str();
 		cv::imwrite("out/out_"+step_string+".png", ocv_map);
 
-		//std::cout << "step "<<step_string<<std::endl;
 		step++;
 		keyboard = cv::waitKey(1);
 
@@ -108,8 +111,8 @@ int main(void) {
 	cudaFree(d_agents.pos);
 	cudaFree(d_agents.angle);
 	cudaFree(d_map.elements);
+	cudaFree(rdm_num);
 
 	cv::destroyWindow("map");
 	return 0;
-
 }

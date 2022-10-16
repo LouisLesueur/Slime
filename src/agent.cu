@@ -25,7 +25,19 @@ __global__ void cuda_move(Agents agents, TrailMatrix map, float speed, float dt,
 	}
 }
 
-__global__ void cuda_evaporate(TrailMatrix map, TrailMatrix new_map,  float evaporate_rate, float dt){
+__global__ void cuda_evaporate(TrailMatrix map, float evaporate_rate, float dt){
+	int index = blockIdx.x*blockDim.x + threadIdx.x;
+	if(index < map.width*map.height){
+		
+		if(map.elements[index] - evaporate_rate*dt < 0)
+			map.elements[index] = 0;
+		else
+			map.elements[index] -= evaporate_rate*dt;
+	}
+}
+
+	
+__global__ void cuda_gauss(TrailMatrix map, TrailMatrix new_map){
 	int index = blockIdx.x*blockDim.x + threadIdx.x;
 	int i = int(index) / int(map.width);
 	int j = index % map.width;
@@ -34,12 +46,6 @@ __global__ void cuda_evaporate(TrailMatrix map, TrailMatrix new_map,  float evap
 	//Gaussian blur 5x5 kernel white noise, 0 padding
 	if(2 <= i && i < map.width-2 && 2 <= j && j < map.height-2){
 		
-		if(map.elements[index] - evaporate_rate*dt < 0)
-			map.elements[index] = 0;
-		else
-			map.elements[index] -= evaporate_rate*dt;
-		
-
 		int indexes[25] = {
 			(i-2)*map.width + (j-2), (i-1)*map.width + (j-2), i*map.width + (j-2), (i+1)*map.width + (j-2), (i+2)*map.width + (j-2),
 			(i-2)*map.width + (j-1), (i-1)*map.width + (j-1), i*map.width + (j-1), (i+1)*map.width + (j-1), (i+2)*map.width + (j-1),
@@ -100,7 +106,7 @@ __global__ void cuda_sense(Agents agents, TrailMatrix map, float senseAngle, flo
 		if(w[1] > w[0] && w[1] > w[2])
 			agents.angle[i] += 0;
 		else if(w[1] < w[0] && w[1] < w[2])
-			agents.angle[i] += 2*(rdm_num[i] - 1)*turnspeed; 
+			agents.angle[i] += (2*rdm_num[i] - 1)*turnspeed; 
 		else if(w[2] > w[0])
 			agents.angle[i] -= rdm_num[i]*turnspeed;
 		else if(w[0] > w[2])
@@ -110,29 +116,26 @@ __global__ void cuda_sense(Agents agents, TrailMatrix map, float senseAngle, flo
 
 }
 
-void move(const Agents &d_agents, const TrailMatrix &d_map, Params params, curandGenerator_t gen){
+void move(const Agents &d_agents, const TrailMatrix &d_map, Params params, curandGenerator_t gen, float* rdm_num){
 
 	int threadsPerBlock = 512;
 	int numBlocks(d_agents.n_agents / threadsPerBlock + 1);
-	float *rdm_num;
-	cudaMalloc(&rdm_num, d_agents.n_agents*sizeof(float));
 	
 	curandGenerateUniform(gen, rdm_num, d_agents.n_agents);
 	cuda_move<<<numBlocks, threadsPerBlock>>>(d_agents, d_map, params.speed, params.dt, rdm_num);
-
+	
 	TrailMatrix d_n_map;
 	d_n_map.height = d_map.height;
 	d_n_map.width = d_map.width;
 	cudaMalloc(&(d_n_map.elements), d_map.width*d_map.height*sizeof(float));
-
 	numBlocks = (d_map.width*d_map.height) / threadsPerBlock + 1;
-	cuda_evaporate<<<numBlocks, threadsPerBlock>>>(d_map, d_n_map, params.evaporate_rate, params.dt);
-	//cuda_equal<<<dimBlock, dimGrid>>>(d_map, d_n_map);
+	cuda_gauss<<<numBlocks, threadsPerBlock>>>(d_map, d_n_map);
 	cudaMemcpy(d_map.elements, d_n_map.elements, d_map.width*d_map.height*sizeof(float), cudaMemcpyDeviceToDevice);
 	cudaFree(d_n_map.elements);
-
+	
+	numBlocks = (d_map.width*d_map.height) / threadsPerBlock + 1;
+	cuda_evaporate<<<numBlocks, threadsPerBlock>>>(d_map, params.evaporate_rate, params.dt);
+	
 	curandGenerateUniform(gen, rdm_num, d_agents.n_agents);
 	cuda_sense<<<numBlocks, threadsPerBlock>>>(d_agents, d_map, params.senseAngle, params.senseRadius, params.senseSize, params.turnspeed, rdm_num);
-
-	cudaFree(rdm_num);
 }

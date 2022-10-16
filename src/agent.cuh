@@ -18,4 +18,4 @@ struct Params {
 	float turnspeed;
 };
 
-void move(const Agents &d_agents, const TrailMatrix &d_map, Params params, curandGenerator_t gen);
+void move(const Agents &d_agents, const TrailMatrix &d_map, Params params, curandGenerator_t gen, float* rdm_num);
