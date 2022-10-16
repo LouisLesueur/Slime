@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
+project(Slime LANGUAGES CXX CUDA)
+enable_language(CUDA)
+find_package( OpenCV REQUIRED  )
+include_directories( ${OpenCV_INCLUDE_DIRS}  )
+add_executable(Slime src/agent.cu src/trailmap.cu src/main.cu)
+target_link_libraries( Slime ${OpenCV_LIBS} -lcurand)
