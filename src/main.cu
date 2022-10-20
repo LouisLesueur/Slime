@@ -14,20 +14,32 @@
 
 using namespace std;
 
+void init_positions(const Agents &agents, float x, float y, float radius) {
+
+	for(int i=0; i<agents.n_agents; i++){
+		float rdm_radius = radius*(static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
+		float rdm_angle = (static_cast <float> (rand()%RAND_MAX) / static_cast <float> (RAND_MAX))*2*PI-PI;
+
+		agents.pos[i].x = rdm_radius*cos(rdm_angle)+x;
+		agents.pos[i].y = rdm_radius*sin(rdm_angle)+y;
+		agents.angle[i] = -rdm_angle;
+	}
+}
+
 int main(void) {
 
 	int height = 1000;
 	int width = 1000;
-	int n_agents = 500000;
+	int n_agents = 100000;
 
 	Params params;
 
 	params.speed = 1;
 	params.dt = 1;
-	params.evaporate_rate = 0.07;
-	params.senseAngle = 0.8*PI; // strong impact on dispersion
-	params.senseSize = 10; // strong impact on edge formation
-	params.senseRadius = 25; // Strong impact on cell sizes
+	params.evaporate_rate = 0.03;
+	params.senseAngle = 0.6*PI; // strong impact on dispersion
+	params.senseSize = 3; // strong impact on edge formation
+	params.senseRadius = 10; // Strong impact on cell sizes
 	params.turnspeed = 0.5;
 
 	if(sin(params.senseAngle/2)*params.senseRadius <= params.senseSize)
@@ -46,15 +58,10 @@ int main(void) {
 	agents.angle = (float *) malloc(agents.n_agents*sizeof(float));
 
 	// Random initial positions
-	float x_start = (width/2.f)-10.f;
-	float x_stop = (width/2.f)+10.f;
-	float y_start = (height/2.f)-10.f;
-	float y_stop = (height/2.f)+10.f;
-	for(int i=0; i<agents.n_agents; i++){
-		agents.pos[i].x = (x_stop-x_start)*(static_cast <float> (rand()) / static_cast <float> (RAND_MAX))+x_start;
-		agents.pos[i].y = (y_stop-y_start)*(static_cast <float> (rand()) / static_cast <float> (RAND_MAX))+y_start;
-		agents.angle[i] = (static_cast <float> (rand()%RAND_MAX) / static_cast <float> (RAND_MAX))*2*PI-PI;
-	}
+	float x_center = (width/2.f);
+	float y_center = (height/2.f);
+	float radius = 150.f;
+	init_positions(agents, x_center, y_center, radius);
 	
 	//Send agents to device
 	Agents d_agents;

@@ -9,7 +9,8 @@ __global__ void cuda_move(Agents agents, TrailMatrix map, float speed, float dt,
 	if(i < agents.n_agents){
 		float new_x = agents.pos[i].x + cos(agents.angle[i]) * speed * dt;
 		float new_y = agents.pos[i].y + sin(agents.angle[i]) * speed * dt;
-		
+
+                // collisions		
 		if (new_x < 0 || new_x >= map.width || new_y < 0 || new_y >= map.height) {
 			// Margin for the hand-coded Gaussian kernel !
 			new_x = min(float(map.width-3), max(0.f, new_x));
