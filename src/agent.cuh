@@ -16,6 +16,7 @@ struct Params {
 	float senseRadius; 
 	int senseSize;
 	float turnspeed;
+	float diff_decay;
 };
 
 void move(const Agents &d_agents, const TrailMatrix &d_map, Params params, curandGenerator_t gen, float* rdm_num);

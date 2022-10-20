@@ -10,7 +10,13 @@
 #include <curand.h>
 #include "agent.cuh"
 #include "trailmap.cuh"
+
+#define CVUI_IMPLEMENTATION
+#include "../lib/cvui.h"
+
 #define PI 3.14159265
+
+#define WINDOW_NAME "Slime simulation"
 
 using namespace std;
 
@@ -36,11 +42,12 @@ int main(void) {
 
 	params.speed = 1;
 	params.dt = 1;
-	params.evaporate_rate = 0.03;
-	params.senseAngle = 0.6*PI; // strong impact on dispersion
-	params.senseSize = 3; // strong impact on edge formation
-	params.senseRadius = 10; // Strong impact on cell sizes
+	params.evaporate_rate = 0.02;
+	params.senseAngle = 0.5*PI; // strong impact on dispersion
+	params.senseSize = 2; // strong impact on edge formation
+	params.senseRadius = 5; // Strong impact on cell sizes
 	params.turnspeed = 0.5;
+	params.diff_decay = 0.5;
 
 	if(sin(params.senseAngle/2)*params.senseRadius <= params.senseSize)
 		cout << "WARNING !, in this configuration detection zones of ants are overlapping !"<<endl;
@@ -87,28 +94,61 @@ int main(void) {
 
 	// openCV matrix for visualisation + random color
 	cv::Mat ocv_map(width, height, CV_8UC3);
-	cv::Vec3b color(rand()%255, rand()%255, rand()%255);
+	cv::Vec3b color(0, 14, 252);
 	
 	// Allocate a vector on device for randomness
 	float *rdm_num;
 	cudaMalloc(&rdm_num, d_agents.n_agents*sizeof(float));
 
-	cv::namedWindow("map"); 
+	cvui::init(WINDOW_NAME);
 
 	char keyboard = ' ';
 	int step = 0;
+	
 	while (keyboard != 'q') {
 	
 		move(d_agents, d_map, params, gen, rdm_num);
 		cudaMemcpy(map.elements, d_map.elements, map.width*map.height*sizeof(float), cudaMemcpyDeviceToHost);
 
 		mat_t_ocv(map, ocv_map, color);
-		cv::imshow("map", ocv_map);
-
+		
 		std::stringstream stream;
 		stream << std::setw(10) << std::setfill('0') << step;
 		std::string step_string = stream.str();
 		cv::imwrite("out/out_"+step_string+".png", ocv_map);
+		
+		cvui::window(ocv_map, 10, 50, 180, 700, "Settings");
+
+		cvui::printf(ocv_map, 15, 100, "Evaporation rate = %.2f", params.evaporate_rate);
+		int int_ev = int(255*params.evaporate_rate);
+		cvui::trackbar(ocv_map, 15, 130, 150, &int_ev, 0, 255);
+		params.evaporate_rate = float(int_ev)/255.f;
+		
+		cvui::printf(ocv_map, 15, 200, "Sense angle = %.2f PI", params.senseAngle/PI);
+		int int_sa = int(255*params.senseAngle/PI);
+		cvui::trackbar(ocv_map, 15, 230, 150, &int_sa, 0, 255);
+		params.senseAngle = (float(int_sa)*PI)/255.f;
+		
+		cvui::printf(ocv_map, 15, 300, "Sense size = %i", params.senseSize);
+		cvui::trackbar(ocv_map, 15, 330, 150, &params.senseSize, 0, 10);
+		
+		cvui::printf(ocv_map, 15, 400, "Sense radius = %f", params.senseRadius);
+		int int_sr = int(params.senseRadius);
+		cvui::trackbar(ocv_map, 15, 430, 150, &int_sr, 0, 25);
+		params.senseRadius = float(int_sr);
+		
+		cvui::printf(ocv_map, 15, 500, "Turn speed = %f", params.turnspeed);
+		int int_ts = int(params.turnspeed*255);
+		cvui::trackbar(ocv_map, 15, 530, 150, &int_ts, 0, 255);
+		params.turnspeed = float(int_ts)/255.f;
+		
+		cvui::printf(ocv_map, 15, 600, "Diffusion decay = %f", params.diff_decay);
+		int int_dd = int(params.diff_decay*255);
+		cvui::trackbar(ocv_map, 15, 630, 150, &int_dd, 0, 255);
+		params.diff_decay = float(int_dd)/255.f;
+
+		cvui::update();
+		cvui::imshow(WINDOW_NAME, ocv_map);
 
 		step++;
 		keyboard = cv::waitKey(1);

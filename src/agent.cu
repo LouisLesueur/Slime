@@ -38,7 +38,7 @@ __global__ void cuda_evaporate(TrailMatrix map, float evaporate_rate, float dt){
 }
 
 	
-__global__ void cuda_gauss(TrailMatrix map, TrailMatrix new_map){
+__global__ void cuda_gauss(TrailMatrix map, TrailMatrix new_map, float decay){
 	int index = blockIdx.x*blockDim.x + threadIdx.x;
 	int i = int(index) / int(map.width);
 	int j = index % map.width;
@@ -67,7 +67,7 @@ __global__ void cuda_gauss(TrailMatrix map, TrailMatrix new_map){
 		sum += values[4]*(map.elements[indexes[7]] + map.elements[indexes[11]] + map.elements[indexes[13]] + map.elements[indexes[17]]);
 		sum += values[5]*map.elements[indexes[12]];
 
-		new_map.elements[indexes[12]] = min(sum/256.f, 1.f);
+		new_map.elements[indexes[12]] = decay * min(sum/256.f, 1.f) + (1-decay)*map.elements[indexes[12]];
 	}
 
 }
@@ -130,7 +130,7 @@ void move(const Agents &d_agents, const TrailMatrix &d_map, Params params, curan
 	d_n_map.width = d_map.width;
 	cudaMalloc(&(d_n_map.elements), d_map.width*d_map.height*sizeof(float));
 	numBlocks = (d_map.width*d_map.height) / threadsPerBlock + 1;
-	cuda_gauss<<<numBlocks, threadsPerBlock>>>(d_map, d_n_map);
+	cuda_gauss<<<numBlocks, threadsPerBlock>>>(d_map, d_n_map, params.diff_decay);
 	cudaMemcpy(d_map.elements, d_n_map.elements, d_map.width*d_map.height*sizeof(float), cudaMemcpyDeviceToDevice);
 	cudaFree(d_n_map.elements);
 	
