@@ -35,7 +35,7 @@ void init_positions(const Agents &agents, float x, float y, float radius) {
 int main(void) {
 
 	int height = 1000;
-	int width = 1000;
+	int width = 500;
 	int n_agents = 100000;
 
 	Params params;
@@ -106,6 +106,8 @@ int main(void) {
 
 	char keyboard = ' ';
 	int step = 0;
+
+	bool show_menu = false;
 	
 	while (keyboard != 'q') {
 
@@ -123,7 +125,8 @@ int main(void) {
 		stream << std::setw(10) << std::setfill('0') << step;
 		std::string step_string = stream.str();
 		cv::imwrite("out/out_"+step_string+".png", ocv_map);
-		
+
+		if(show_menu==true){
 		cvui::window(ocv_map, 10, 50, 180, 700, "Settings");
 
 		cvui::printf(ocv_map, 15, 100, "Evaporation rate = %.2f", params.evaporate_rate);
@@ -153,12 +156,15 @@ int main(void) {
 		int int_dd = int(params.diff_decay*255);
 		cvui::trackbar(ocv_map, 15, 630, 150, &int_dd, 0, 255);
 		params.diff_decay = float(int_dd)/255.f;
+		}
 
 		cvui::update();
 		cvui::imshow(WINDOW_NAME, ocv_map);
 
 		step++;
 		keyboard = cv::waitKey(1);
+		if(keyboard == 'm')
+			show_menu = !show_menu;
 
 	}
 	
