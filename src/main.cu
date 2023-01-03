@@ -48,6 +48,7 @@ int main(void) {
 	params.senseRadius = 5; // Strong impact on cell sizes
 	params.turnspeed = 0.5;
 	params.diff_decay = 0.5;
+	params.col_speed = 10;
 
 	if(sin(params.senseAngle/2)*params.senseRadius <= params.senseSize)
 		cout << "WARNING !, in this configuration detection zones of ants are overlapping !"<<endl;
@@ -94,7 +95,8 @@ int main(void) {
 
 	// openCV matrix for visualisation + random color
 	cv::Mat ocv_map(width, height, CV_8UC3);
-	cv::Vec3b color(0, 14, 252);
+	cv::Vec3i color(rand()%255, rand()%255, rand()%255);
+	cv::Vec3i color_eps(0,0,0);
 	
 	// Allocate a vector on device for randomness
 	float *rdm_num;
@@ -106,6 +108,11 @@ int main(void) {
 	int step = 0;
 	
 	while (keyboard != 'q') {
+
+		if(step%params.col_speed == 0){
+			color = color + color_eps;
+			color_eps = cv::Vec3i(2*(rand()%15)-15, 2*(rand()%15)-15, 2*(rand()%15)-15);
+		}
 	
 		move(d_agents, d_map, params, gen, rdm_num);
 		cudaMemcpy(map.elements, d_map.elements, map.width*map.height*sizeof(float), cudaMemcpyDeviceToHost);
