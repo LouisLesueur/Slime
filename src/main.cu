@@ -34,8 +34,8 @@ void init_positions(const Agents &agents, float x, float y, float radius) {
 
 int main(void) {
 
-	int height = 1000;
-	int width = 500;
+	int height = 1080;
+	int width = 1920;
 	int n_agents = 100000;
 
 	Params params;
@@ -66,9 +66,9 @@ int main(void) {
 	agents.angle = (float *) malloc(agents.n_agents*sizeof(float));
 
 	// Random initial positions
-	float x_center = (width/2.f);
-	float y_center = (height/2.f);
-	float radius = 150.f;
+	float x_center = (height/2.f);
+	float y_center = (width/2.f);
+	float radius = 15.f;
 	init_positions(agents, x_center, y_center, radius);
 	
 	//Send agents to device
@@ -94,7 +94,7 @@ int main(void) {
 	cudaMemcpy(d_map.elements, map.elements, map.width*map.height*sizeof(float), cudaMemcpyHostToDevice);
 
 	// openCV matrix for visualisation + random color
-	cv::Mat ocv_map(width, height, CV_8UC3);
+	cv::Mat ocv_map(height, width, CV_8UC3);
 	cv::Vec3i color(rand()%255, rand()%255, rand()%255);
 	cv::Vec3i color_eps(0,0,0);
 	
@@ -111,11 +111,6 @@ int main(void) {
 	
 	while (keyboard != 'q') {
 
-		if(step%params.col_speed == 0){
-			color = color + color_eps;
-			color_eps = cv::Vec3i(2*(rand()%15)-15, 2*(rand()%15)-15, 2*(rand()%15)-15);
-		}
-	
 		move(d_agents, d_map, params, gen, rdm_num);
 		cudaMemcpy(map.elements, d_map.elements, map.width*map.height*sizeof(float), cudaMemcpyDeviceToHost);
 

@@ -8,8 +8,8 @@
 using namespace std;
 
 void mat_t_ocv(const TrailMatrix &map, cv::Mat ocv_map, cv::Vec3b color){
-	for(int i=0; i<map.width; i++){
-		for(int j=0; j < map.height; j++){
+	for(int i=0; i<map.height; i++){
+		for(int j=0; j < map.width; j++){
 			int index = i*map.width + j;
 			ocv_map.at<cv::Vec3b>(i,j) = cv::Vec3b(uint8_t(float(color[0])*map.elements[index]),
 					                       uint8_t(float(color[1])*map.elements[index]),

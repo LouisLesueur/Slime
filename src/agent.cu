@@ -11,10 +11,10 @@ __global__ void cuda_move(Agents agents, TrailMatrix map, float speed, float dt,
 		float new_y = agents.pos[i].y + sin(agents.angle[i]) * speed * dt;
 
                 // collisions		
-		if (new_x < 0 || new_x >= map.width || new_y < 0 || new_y >= map.height) {
+		if (new_x < 0 || new_x >= map.height || new_y < 0 || new_y >= map.width) {
 			// Margin for the hand-coded Gaussian kernel !
-			new_x = min(float(map.width-3), max(0.f, new_x));
-			new_y = min(float(map.height-3), max(0.f, new_y));
+			new_x = min(float(map.height-3), max(0.f, new_x));
+			new_y = min(float(map.width-3), max(0.f, new_y));
 			agents.angle[i] += 2*PI*rdm_num[i];
 		}
 
@@ -41,16 +41,16 @@ __global__ void cuda_evaporate(TrailMatrix map, float evaporate_rate, float dt){
 __global__ void cuda_gauss(TrailMatrix map, TrailMatrix new_map, float decay){
 	int index = blockIdx.x*blockDim.x + threadIdx.x;
 	int i = int(index) / int(map.width);
-	int j = index % map.width;
+	int j = int(index) % int(map.width);
 	
 	
 	//Gaussian blur 5x5 kernel white noise, 0 padding
-	if(2 <= i && i < map.width-2 && 2 <= j && j < map.height-2){
+	if(2 <= i && i < map.height-2 && 2 <= j && j < map.width-2){
 		
 		int indexes[25] = {
 			(i-2)*map.width + (j-2), (i-1)*map.width + (j-2), i*map.width + (j-2), (i+1)*map.width + (j-2), (i+2)*map.width + (j-2),
 			(i-2)*map.width + (j-1), (i-1)*map.width + (j-1), i*map.width + (j-1), (i+1)*map.width + (j-1), (i+2)*map.width + (j-1),
-			(i-2)*map.width + j,     (i-1)*map.width +  j,    i*map.width + j,     (i+1)*map.width + j,     (i+2)*map.width + j,
+			(i-2)*map.width +     j, (i-1)*map.width +     j, i*map.width +     j, (i+1)*map.width +     j, (i+2)*map.width +     j,
 			(i-2)*map.width + (j+1), (i-1)*map.width + (j+1), i*map.width + (j+1), (i+1)*map.width + (j+1), (i+2)*map.width + (j+1),
 			(i-2)*map.width + (j+2), (i-1)*map.width + (j+2), i*map.width + (j+2), (i+1)*map.width + (j+2), (i+2)*map.width + (j+2)
 
@@ -96,8 +96,8 @@ __global__ void cuda_sense(Agents agents, TrailMatrix map, float senseAngle, flo
 					posx = int(x) + k;
 					posy = int(y) + j;
 
-					if(0<=posx && posx<map.width && 0 <=posy && posy<map.height){
-						int index = map.width*posx + posy;
+					if(0<=posx && posx<map.height && 0 <=posy && posy<map.width){
+						int index = posx*map.width + posy;
 						w[ii] += map.elements[index];
 					}
 				}
