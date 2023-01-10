@@ -7,7 +7,8 @@
 struct TrailMatrix {
 	int width;
 	int height;
+	int n_species;
 	float* elements;
 };
 
-void mat_t_ocv(const TrailMatrix &map, cv::Mat ocv_map, cv::Vec3b color);
+void mat_t_ocv(const TrailMatrix &map, cv::Mat ocv_map, uint8_t* colors);

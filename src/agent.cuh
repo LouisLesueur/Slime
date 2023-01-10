@@ -4,8 +4,10 @@
 
 struct Agents {
 	int n_agents;
+	int* species;
 	float2* pos;
 	float* angle;
+        uint8_t* colors;	
 };
 
 struct Params {

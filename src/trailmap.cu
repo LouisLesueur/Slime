@@ -7,13 +7,23 @@
 
 using namespace std;
 
-void mat_t_ocv(const TrailMatrix &map, cv::Mat ocv_map, cv::Vec3b color){
+void mat_t_ocv(const TrailMatrix &map, cv::Mat ocv_map, uint8_t* color){
 	for(int i=0; i<map.height; i++){
 		for(int j=0; j < map.width; j++){
-			int index = i*map.width + j;
-			ocv_map.at<cv::Vec3b>(i,j) = cv::Vec3b(uint8_t(float(color[0])*map.elements[index]),
-					                       uint8_t(float(color[1])*map.elements[index]),
-							       uint8_t(float(color[2])*map.elements[index]));
+			int max_k = 0;
+			float max_val = 0;
+
+			for(int k=0; k < map.n_species; k++){
+				int index = i*map.width + j + k*map.width*map.height;
+				if(map.elements[index] > max_val){
+					max_val = map.elements[index];
+					max_k = k;
+				}
+			}
+
+			ocv_map.at<cv::Vec3b>(i,j) = cv::Vec3b(uint8_t(float(color[max_k*3])*max_val),
+							       uint8_t(float(color[max_k*3+1])*max_val),
+							       uint8_t(float(color[max_k*3+2])*max_val));
 		}
 	}
 

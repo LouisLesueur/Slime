@@ -20,15 +20,16 @@ __global__ void cuda_move(Agents agents, TrailMatrix map, float speed, float dt,
 
 		agents.pos[i].x = new_x;
 		agents.pos[i].y = new_y;
+		
 
-		int index = int(new_x)*map.width + int(new_y);
+		int index = int(new_x)*map.width + int(new_y) + map.width*map.height*int(agents.species[i]);
 		map.elements[index] = 1;
 	}
 }
 
 __global__ void cuda_evaporate(TrailMatrix map, float evaporate_rate, float dt){
 	int index = blockIdx.x*blockDim.x + threadIdx.x;
-	if(index < map.width*map.height){
+	if(index < map.width*map.height*map.n_species){
 		
 		if(map.elements[index] - evaporate_rate*dt < 0)
 			map.elements[index] = 0;
@@ -40,7 +41,7 @@ __global__ void cuda_evaporate(TrailMatrix map, float evaporate_rate, float dt){
 	
 __global__ void cuda_gauss(TrailMatrix map, TrailMatrix new_map, float decay){
 	int index = blockIdx.x*blockDim.x + threadIdx.x;
-	int i = int(index) / int(map.width);
+	int i = (int(index) / int(map.width))%int(map.height);
 	int j = int(index) % int(map.width);
 	
 	
@@ -57,17 +58,28 @@ __global__ void cuda_gauss(TrailMatrix map, TrailMatrix new_map, float decay){
 		};
 
 		float values[6] = {1.f, 4.f, 6.f, 16.f, 24.f, 36.f};
-		float sum = 0;
 
-		sum += values[0]*(map.elements[indexes[0]] + map.elements[indexes[4]] + map.elements[indexes[20]] + map.elements[indexes[24]]);
-		sum += values[1]*(map.elements[indexes[1]] + map.elements[indexes[3]] + map.elements[indexes[5]] + map.elements[indexes[9]] + 
-				  map.elements[indexes[15]] + map.elements[indexes[19]] + map.elements[indexes[21]] + map.elements[indexes[23]]);
-		sum += values[2]*(map.elements[indexes[2]] + map.elements[indexes[10]] + map.elements[indexes[14]] + map.elements[indexes[16]] + map.elements[indexes[18]]);
-		sum += values[3]*(map.elements[indexes[6]] + map.elements[indexes[8]] + map.elements[indexes[16]] + map.elements[indexes[18]]);
-		sum += values[4]*(map.elements[indexes[7]] + map.elements[indexes[11]] + map.elements[indexes[13]] + map.elements[indexes[17]]);
-		sum += values[5]*map.elements[indexes[12]];
+		for(int k=0; k<map.n_species; k++){
+			float sum = 0;
 
-		new_map.elements[indexes[12]] = decay * min(sum/256.f, 1.f) + (1-decay)*map.elements[indexes[12]];
+			sum += values[0]*(map.elements[indexes[0 ]+k*map.width*map.height] + map.elements[indexes[4 ] +k*map.width*map.height] + 
+					  map.elements[indexes[20]+k*map.width*map.height] + map.elements[indexes[24]+k*map.height*map.width]);
+			sum += values[1]*(map.elements[indexes[1 ]+k*map.width*map.height] + map.elements[indexes[3 ] +k*map.width*map.height] + 
+					  map.elements[indexes[5 ]+k*map.width*map.height] + map.elements[indexes[9 ] +k*map.height*map.width] + 
+					  map.elements[indexes[15]+k*map.width*map.height] + map.elements[indexes[19]+k*map.width*map.height] + 
+					  map.elements[indexes[21]+k*map.width*map.height] + map.elements[indexes[23]+k*map.height*map.width]);
+			sum += values[2]*(map.elements[indexes[2 ]+k*map.width*map.height] + map.elements[indexes[10]+k*map.width*map.height] + 
+					  map.elements[indexes[14]+k*map.width*map.height] + map.elements[indexes[16]+k*map.height*map.width] + 
+					  map.elements[indexes[18]+k*map.width*map.height]);
+			sum += values[3]*(map.elements[indexes[6 ]+k*map.width*map.height] + map.elements[indexes[8 ] +k*map.width*map.height] + 
+					  map.elements[indexes[16]+k*map.width*map.height] + map.elements[indexes[18]+k*map.height*map.width]);
+			sum += values[4]*(map.elements[indexes[7 ]+k*map.width*map.height] + map.elements[indexes[11]+k*map.width*map.height] + 
+					  map.elements[indexes[13]+k*map.width*map.height] + map.elements[indexes[17]+k*map.width*map.height]);
+			sum += values[5]* map.elements[indexes[12]+k*map.width*map.height];
+
+			new_map.elements[indexes[12]+k*map.width*map.height] = decay * min(sum/256.f, 1.f) + (1-decay)*map.elements[indexes[12]+k*map.width*map.height];
+
+		}
 	}
 
 }
@@ -89,6 +101,8 @@ __global__ void cuda_sense(Agents agents, TrailMatrix map, float senseAngle, flo
 			float x = agents.pos[i].x + dir_x;
 			float y = agents.pos[i].y + dir_y;
 
+			int species = agents.species[i];
+
 			int posx, posy;
 
 			for(int k=-senseSize; k<senseSize; k++){
@@ -98,7 +112,10 @@ __global__ void cuda_sense(Agents agents, TrailMatrix map, float senseAngle, flo
 
 					if(0<=posx && posx<map.height && 0 <=posy && posy<map.width){
 						int index = posx*map.width + posy;
-						w[ii] += map.elements[index];
+						w[ii] += map.elements[index+species*map.width*map.height];
+						for(int s=0; s<map.n_species; s++)
+							if(s != species)
+								w[ii] -= map.elements[index+s*map.width*map.height];
 					}
 				}
 			}
@@ -121,22 +138,25 @@ void move(const Agents &d_agents, const TrailMatrix &d_map, Params params, curan
 
 	int threadsPerBlock = 512;
 	int numBlocks(d_agents.n_agents / threadsPerBlock + 1);
-	
+
 	curandGenerateUniform(gen, rdm_num, d_agents.n_agents);
 	cuda_move<<<numBlocks, threadsPerBlock>>>(d_agents, d_map, params.speed, params.dt, rdm_num);
 	
 	TrailMatrix d_n_map;
 	d_n_map.height = d_map.height;
 	d_n_map.width = d_map.width;
-	cudaMalloc(&(d_n_map.elements), d_map.width*d_map.height*sizeof(float));
+	d_n_map.n_species = d_map.n_species;
+
+	cudaMalloc(&(d_n_map.elements), d_map.width*d_map.height*d_map.n_species*sizeof(float));
 	numBlocks = (d_map.width*d_map.height) / threadsPerBlock + 1;
 	cuda_gauss<<<numBlocks, threadsPerBlock>>>(d_map, d_n_map, params.diff_decay);
-	cudaMemcpy(d_map.elements, d_n_map.elements, d_map.width*d_map.height*sizeof(float), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(d_map.elements, d_n_map.elements, d_map.width*d_map.height*d_map.n_species*sizeof(float), cudaMemcpyDeviceToDevice);
 	cudaFree(d_n_map.elements);
 	
-	numBlocks = (d_map.width*d_map.height) / threadsPerBlock + 1;
+	numBlocks = (d_map.width*d_map.height*d_map.n_species) / threadsPerBlock + 1;
 	cuda_evaporate<<<numBlocks, threadsPerBlock>>>(d_map, params.evaporate_rate, params.dt);
 	
 	curandGenerateUniform(gen, rdm_num, d_agents.n_agents);
+	numBlocks = d_agents.n_agents / threadsPerBlock + 1;
 	cuda_sense<<<numBlocks, threadsPerBlock>>>(d_agents, d_map, params.senseAngle, params.senseRadius, params.senseSize, params.turnspeed, rdm_num);
 }

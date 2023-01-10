@@ -20,7 +20,7 @@
 
 using namespace std;
 
-void init_positions(const Agents &agents, float x, float y, float radius) {
+void init_positions(const Agents &agents, float x, float y, float radius, int n_species) {
 
 	for(int i=0; i<agents.n_agents; i++){
 		float rdm_radius = radius*(static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
@@ -29,13 +29,20 @@ void init_positions(const Agents &agents, float x, float y, float radius) {
 		agents.pos[i].x = rdm_radius*cos(rdm_angle)+x;
 		agents.pos[i].y = rdm_radius*sin(rdm_angle)+y;
 		agents.angle[i] = -rdm_angle;
+		agents.species[i] = int(i%n_species);
+
 	}
+
+        for(int i=0; i<n_species; i++)	
+		for(int j=0; j<3; j++)
+			agents.colors[i*3+j] = uint8_t(rand()%255);
 }
 
 int main(void) {
 
 	int height = 1080;
 	int width = 1920;
+	int n_species = 4;
 	int n_agents = 100000;
 
 	Params params;
@@ -49,6 +56,7 @@ int main(void) {
 	params.turnspeed = 0.5;
 	params.diff_decay = 0.5;
 	params.col_speed = 10;
+
 
 	if(sin(params.senseAngle/2)*params.senseRadius <= params.senseSize)
 		cout << "WARNING !, in this configuration detection zones of ants are overlapping !"<<endl;
@@ -64,39 +72,43 @@ int main(void) {
 	agents.n_agents = n_agents;
 	agents.pos = (float2 *) malloc(agents.n_agents*sizeof(float2));
 	agents.angle = (float *) malloc(agents.n_agents*sizeof(float));
+	agents.species = (int *) malloc(agents.n_agents*sizeof(int));
+	agents.colors = (uint8_t *) malloc(n_species*3*sizeof(uint8_t));
 
 	// Random initial positions
 	float x_center = (height/2.f);
 	float y_center = (width/2.f);
-	float radius = 15.f;
-	init_positions(agents, x_center, y_center, radius);
+	float radius = 500.f;
+	init_positions(agents, x_center, y_center, radius, n_species);
 	
 	//Send agents to device
 	Agents d_agents;
 	d_agents.n_agents = agents.n_agents;
 	cudaMalloc(&(d_agents.pos), agents.n_agents*sizeof(float2));
 	cudaMalloc(&(d_agents.angle), agents.n_agents*sizeof(float));
+	cudaMalloc(&(d_agents.species), agents.n_agents*sizeof(int));
 	cudaMemcpy(d_agents.pos, agents.pos, agents.n_agents*sizeof(float2), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_agents.angle, agents.angle, agents.n_agents*sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_agents.species, agents.species, agents.n_agents*sizeof(int), cudaMemcpyHostToDevice);
 
 	//Allocate trailmap on host
 	TrailMatrix map;
 	map.height = height;
 	map.width = width;
-	map.elements = (float *) malloc(map.height*map.width*sizeof(float));
-	memset(map.elements, 0, map.height*map.width*sizeof(float));
+	map.n_species = n_species;
+	map.elements = (float *) malloc(map.height*map.width*map.n_species*sizeof(float));
+	memset(map.elements, 0, map.height*map.width*map.n_species*sizeof(float));
 	
 	//Send trailmap to device
 	TrailMatrix d_map;
 	d_map.height = map.height;
 	d_map.width = map.width;
-	cudaMalloc(&(d_map.elements), map.width*map.height*sizeof(float));
-	cudaMemcpy(d_map.elements, map.elements, map.width*map.height*sizeof(float), cudaMemcpyHostToDevice);
+	d_map.n_species = map.n_species;
+	cudaMalloc(&(d_map.elements), map.width*map.height*map.n_species*sizeof(float));
+	cudaMemcpy(d_map.elements, map.elements, map.width*map.height*map.n_species*sizeof(float), cudaMemcpyHostToDevice);
 
 	// openCV matrix for visualisation + random color
 	cv::Mat ocv_map(height, width, CV_8UC3);
-	cv::Vec3i color(rand()%255, rand()%255, rand()%255);
-	cv::Vec3i color_eps(0,0,0);
 	
 	// Allocate a vector on device for randomness
 	float *rdm_num;
@@ -112,15 +124,10 @@ int main(void) {
 	while (keyboard != 'q') {
 
 		move(d_agents, d_map, params, gen, rdm_num);
-		cudaMemcpy(map.elements, d_map.elements, map.width*map.height*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(map.elements, d_map.elements, map.width*map.height*map.n_species*sizeof(float), cudaMemcpyDeviceToHost);
 
-		mat_t_ocv(map, ocv_map, color);
+		mat_t_ocv(map, ocv_map, agents.colors);
 		
-		std::stringstream stream;
-		stream << std::setw(10) << std::setfill('0') << step;
-		std::string step_string = stream.str();
-		cv::imwrite("out/out_"+step_string+".png", ocv_map);
-
 		if(show_menu==true){
 		cvui::window(ocv_map, 10, 50, 180, 700, "Settings");
 
@@ -165,6 +172,7 @@ int main(void) {
 	
 	cudaFree(d_agents.pos);
 	cudaFree(d_agents.angle);
+	cudaFree(d_agents.colors);
 	cudaFree(d_map.elements);
 	cudaFree(rdm_num);
 
